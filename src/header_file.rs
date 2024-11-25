@@ -1,39 +1,18 @@
-use std::fs::{self, create_dir_all, File};
-use std::io::{self, BufRead, BufReader, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use crate::Error;
+use crate::c_macro::{self, CMacro};
 
-use thiserror::Error;
+pub fn proc_header_file(file_path: &Path) -> Result<Vec<CMacro>, Error> {
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("IoError")]
-    IoError(#[from] io::Error),
-}
-
-pub fn proc_header_file(file_path: &str) -> Result<String, Error> {
-    let path = Path::new(file_path);
-    let file_name = path.file_name().unwrap().to_str().unwrap();
-
-    let input_file = File::open(path)?;
+    let input_file = File::open(file_path)?;
     let reader = BufReader::new(input_file);
     
-    get_macros(reader).map(|macros| macros.join("\n"))
-
-    // let out_macros = get_macros(reader)?;
-
-    // create_dir_all("output/temp")?;
-    
-    // let output_path = format!("output/temp/{}_macros.h", file_name);
-    // let mut output_file = File::create(&output_path)?;
-    // writeln!(output_file, "/* Extracted macros from {} */\n", file_path)?;
-
-    // output_file.write_all(out_macros.as_bytes())?;
-
-
-    // Ok(())
+    c_macro::convert_string_to_cmacro(get_hal_macros(reader)?)
 }
 
-fn get_macros(reader: BufReader<File>) -> Result<Vec<String>, Error> {
+fn get_hal_macros(reader: BufReader<File>) -> Result<Vec<String>, Error> {
     Ok(reader
         .lines()
         .filter_map(Result::ok)
@@ -43,7 +22,7 @@ fn get_macros(reader: BufReader<File>) -> Result<Vec<String>, Error> {
                 let trimmed = line.trim();
                 
                 // Check the start and end of multi-line macros
-                let is_macro_start = trimmed.starts_with("#define");
+                let is_macro_start = trimmed.starts_with("#define __HAL_");
                 let is_line_continued = trimmed.ends_with("\\");
                 
                 match (is_macro_start, is_multiline, is_line_continued) {
@@ -73,6 +52,8 @@ fn get_macros(reader: BufReader<File>) -> Result<Vec<String>, Error> {
         )
         .0
         .into_iter()
-        .map(|macro_def| macro_def.replace("\\/", ""))  // Remove continuation character
+        .map(|macro_def| macro_def.replace("\\", ""))  // Remove continuation character
         .collect::<Vec<String>>())
 }
+
+
