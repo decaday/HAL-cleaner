@@ -25,7 +25,12 @@ pub fn process_c_macros(macros: &[CMacro], input_file: &Path, output_file: &Path
     let mut buffer = String::new();
     
     for line in reader.lines() {
-        let line = line?;
+        let line = line?.replace("#ifdef ", "//HC #ifdef ")
+            .replace("#ifndef ", "//HC #ifndef ")
+            .replace("#if ", "//HC #if ")
+            .replace("#else ", "//HC #else ")
+            .replace("#endif ", "//HC #endif ");
+
         buffer.push_str(&line);
         buffer.push('\n'); // 保留换行，确保宏可以跨多行解析
 
@@ -55,51 +60,6 @@ pub fn process_c_macros(macros: &[CMacro], input_file: &Path, output_file: &Path
     }
 
     Ok(())
-}
-
-
-pub fn convert_string_to_cmacro(macros: Vec<String>) -> Result<Vec<CMacro>, Error> {
-    Ok(macros.into_iter()
-        .map(|macro_str| {
-            // 使用正则表达式解析宏定义
-            let macro_regex = Regex::new(r"#define\s*(\w+)\s*\((.*?)\)\s*([\s\S]*)").unwrap();
-            
-            let captures = macro_regex.captures(&macro_str).expect("Invalid macro format");
-            
-            // 提取名称
-            let name = captures.get(1).map_or("", |m| m.as_str()).to_string();
-            
-            // 解析参数
-            let params: Vec<String> = captures.get(2)
-                .map_or(Vec::new(), |m| 
-                    m.as_str()
-                     .split(',')
-                     .map(|p| p.trim().to_string())
-                     .filter(|p| !p.is_empty())
-                     .collect()
-                );
-            
-            // 处理宏内容
-            let mut content = captures.get(3)
-                .map_or("", |m| m.as_str())
-                .trim()
-                .to_string();
-            
-            // 替换多个空格为两个空格
-            content = content.split_whitespace().collect::<Vec<&str>>().join(" ");
-            
-            // 删除开头的do{和末尾的} while(0)
-            if content.starts_with("do{") && content.ends_with("} while(0)") {
-                content = content[3..content.len()-10].trim().to_string();
-            }
-            
-            CMacro {
-                name,
-                params: Some(params),
-                content,
-            }
-        })
-        .collect())
 }
 
 fn expand_c_macro(macro_def: &CMacro, input_statement: &str) -> String {
@@ -145,6 +105,51 @@ fn expand_c_macro(macro_def: &CMacro, input_statement: &str) -> String {
 
     expanded_statement
 }
+
+pub fn convert_string_to_cmacro(macros: Vec<String>) -> Result<Vec<CMacro>, Error> {
+    Ok(macros.into_iter()
+        .map(|macro_str| {
+            // 使用正则表达式解析宏定义
+            let macro_regex = Regex::new(r"#define\s*(\w+)\s*\((.*?)\)\s*([\s\S]*)").unwrap();
+            
+            let captures = macro_regex.captures(&macro_str).expect("Invalid macro format");
+            
+            // 提取名称
+            let name = captures.get(1).map_or("", |m| m.as_str()).to_string();
+            
+            // 解析参数
+            let params: Vec<String> = captures.get(2)
+                .map_or(Vec::new(), |m| 
+                    m.as_str()
+                     .split(',')
+                     .map(|p| p.trim().to_string())
+                     .filter(|p| !p.is_empty())
+                     .collect()
+                );
+            
+            // 处理宏内容
+            let mut content = captures.get(3)
+                .map_or("", |m| m.as_str())
+                .trim()
+                .to_string();
+            
+            // 替换多个空格为两个空格
+            content = content.split_whitespace().collect::<Vec<&str>>().join(" ");
+            
+            // 删除开头的do{和末尾的} while(0)
+            if content.starts_with("do{") && content.ends_with("} while(0)") {
+                content = content[3..content.len()-10].trim().to_string();
+            }
+            
+            CMacro {
+                name,
+                params: Some(params),
+                content,
+            }
+        })
+        .collect())
+}
+
 
 // 测试模块
 #[cfg(test)]

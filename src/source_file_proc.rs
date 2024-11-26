@@ -1,9 +1,8 @@
 use std::fs::{self, File};
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
-use std::process::Output;
 
-use tree_sitter::Parser;
+use tree_sitter::{Parser, Node};
 
 use crate::Error;
 use crate::c_macro::{self, CMacro};
@@ -20,7 +19,7 @@ pub fn proc_source_file(input_path: &Path, output_path: &Path, c_macros: Option<
         input_path
     };
     
-    // parse(temp_path, output_path)?;
+    parse(temp_path, output_path)?;
 
     Ok(())
 }
@@ -43,7 +42,7 @@ fn parse(input_path: &Path, output_path: &Path) -> Result<(), Error> {
     let mut last_byte_pos = 0;
 
     for node in root_node.children(&mut root_node.walk()) {
-        if node.kind() == "function_item" {
+        if node.kind() == "function_definition" {
             // let function_text = parse_function(node, source_code);
             
             let current_start = node.start_byte();
@@ -53,7 +52,26 @@ fn parse(input_path: &Path, output_path: &Path) -> Result<(), Error> {
             
             last_byte_pos = node.end_byte();
         }
+        else if node.kind() == "ERROR" {
+            let start = node.byte_range().start;
+            let end = node.byte_range().end;
+            println!("{}- {} - ", node.kind(), &source_code[start..start+100]);
+        }
+        else {
+            println!("{}- {} - {}", node.kind(), node.start_byte(), node.end_byte());
+        }
     }
+    
 
     Ok(())
+}
+
+fn parse_function(node: Node, source_code: &str) -> String {
+    let mut function_text = String::new();
+    let mut cursor = node.walk();
+    for (idx, child) in node.children(&mut cursor).enumerate() {
+        let field_name = node.field_name_for_child(idx as u32).unwrap_or("none");
+        function_text.push_str(&source_code[child.byte_range()]);
+    }
+    function_text
 }
